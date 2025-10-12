@@ -1,0 +1,14 @@
+# Example model configuration. Copy to model.yaml and adjust.
+model:
+  name: llama-7b
+  revision: latest
+  precision: float16
+  quantization: none
+runtime:
+  batch_size: 1
+  max_input_tokens: 2048
+  warm_start: true
+resources:
+  cpu_cores: 8
+  ram_gb: 64
+  gpu_memory_gb: 48

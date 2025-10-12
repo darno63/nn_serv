@@ -1,0 +1,6 @@
+# Example configuration for Lambda Cloud deployment
+lambda_api_key   = "YOUR_API_KEY"
+region           = "us-south-1"
+instance_type    = "gpu_1x_a100_sxm4"
+ssh_key_name     = "your-ssh-key-name"
+project_name     = "nn-serv"

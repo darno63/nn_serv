@@ -1,0 +1,6 @@
+# Core runtime dependencies for the service
+# Pin versions in production to ensure reproducibility
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+numpy>=1.26

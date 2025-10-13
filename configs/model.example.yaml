@@ -4,6 +4,8 @@ model:
   revision: latest
   precision: float16
   quantization: none
+  # Optional: point to a pre-staged checkpoint within the mounted filesystem
+  local_path: /models/Wan-AI/Wan2.2-T2V-A14B
 runtime:
   batch_size: 1
   max_input_tokens: 2048

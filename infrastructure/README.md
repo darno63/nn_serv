@@ -2,8 +2,8 @@
 
 Use this directory for infrastructure automation. Suggested layout:
 
-- `terraform/` for provisioning compute (VMs, networks, storage).
+- `lambda/` for Lambda Cloud REST API workflows and notes.
 - `ansible/` for configuring provisioned machines (drivers, containers, monitoring).
-- `modules/` for shared Terraform modules.
+- `terraform/` for other cloud IaC modules if you add them later.
 
 Document required environment variables (cloud credentials) in each subfolder.

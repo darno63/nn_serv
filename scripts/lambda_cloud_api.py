@@ -13,6 +13,7 @@ from urllib import error, parse, request
 
 DEFAULT_BASE_URL = os.getenv("LAMBDA_API_BASE_URL", "https://cloud.lambda.ai")
 API_TIMEOUT_SECONDS = 30
+DEFAULT_USER_AGENT = "nn-serv-cli/0.1"
 
 
 class LambdaApiClient:
@@ -42,6 +43,7 @@ class LambdaApiClient:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Accept": "application/json",
+            "User-Agent": os.getenv("LAMBDA_API_USER_AGENT", DEFAULT_USER_AGENT),
         }
 
         data: bytes | None = None

@@ -7,3 +7,6 @@ terraform.tfstate
 terraform.tfstate.*
 .terraform/
 .terraform.lock.hcl
+node_modules/
+frontend/node_modules/
+frontend/dist/

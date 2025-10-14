@@ -33,6 +33,7 @@ Infrastructure-as-code friendly template for deploying RAM-intensive AI workload
 1. **Prep credentials**  
    - Export `LAMBDA_API_KEY` and (if the model is gated) `HF_TOKEN`.  
    - Copy `.env.example` to `.env`, adjust `MODEL_CONFIG`, and keep `MODEL_DATA_DIR=/models`.
+   - Update `ALLOWED_ORIGINS` if your frontend runs on additional hosts.
 
 2. **Inspect capacity and filesystems**  
    ```bash
@@ -75,3 +76,31 @@ Infrastructure-as-code friendly template for deploying RAM-intensive AI workload
    scripts/lambda_cloud_api.py terminate-instances <INSTANCE_ID>
    ```
    The filesystem (and Wan2 weights) stays intact for the next launch.
+
+## Local Development
+
+- **Backend**
+  - `python3 -m venv .venv && source .venv/bin/activate`
+  - `pip install -r requirements/base.txt`
+  - `cp .env.example .env` and tweak as needed (`ALLOWED_ORIGINS` should include your frontend origin)
+  - `uvicorn src.main:app --reload --host 0.0.0.0 --port 8000`
+
+- **Frontend**
+  - `cd frontend`
+  - `cp .env.example .env.local` (optional – override `VITE_API_BASE_URL`/`VITE_API_PREFIX`)
+  - `npm install`
+  - `npm run dev`
+
+The React dev server defaults to `http://localhost:5173` and proxies `/api/*` requests to the backend.
+
+## Docker Compose (optional)
+
+To spin up both services with one command (useful for CI or end-to-end testing):
+
+```bash
+docker compose up --build
+```
+
+- Frontend is mapped to `http://localhost:${FRONTEND_PORT:-5173}`
+- Backend is mapped to `http://localhost:8000`
+- Edit `.env` / `.env.local` for configuration overrides.

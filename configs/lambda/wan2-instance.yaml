@@ -1,0 +1,9 @@
+# Default launch parameters for Wan2 inference nodes.
+launch:
+  region: us-east-3
+  instance_type: gpu_1x_gh200
+  ssh_keys:
+    - lambda
+  filesystem_names:
+    - nndc
+  name: wan2-runner

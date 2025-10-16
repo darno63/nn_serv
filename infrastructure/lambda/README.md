@@ -24,20 +24,16 @@ Use these notes alongside `scripts/lambda_cloud_api.py` to create and manage GPU
    ```bash
    scripts/preload_model.py Wan-AI/Wan2.2-T2V-A14B /lambda/nfs/my-persistent-fs/Wan-AI
    ```
+   Update `configs/lambda/wan2-instance.yaml` with your region, instance type, filesystem, and SSH key settings.
 3. Upload or generate an SSH key if needed:
    ```bash
    scripts/lambda_cloud_api.py add-ssh-key --name my-key --public-key ~/.ssh/id_ed25519.pub
    ```
 4. Launch an instance in your target region, attaching the filesystem so Wan2 stays resident between runs:
    ```bash
-   scripts/lambda_cloud_api.py launch-instance \
-     --region us-south-1 \
-     --instance-type gpu_1x_a100_sxm4 \
-     --ssh-key my-key \
-     --filesystem my-persistent-fs \
-     --name nn-serv-worker
+   scripts/lambda_cloud_api.py launch-instance --config wan2-instance
    ```
-   The command prints the new instance ID; use it for SSH and lifecycle operations.
+   Use flags such as `--region` or `--ssh-key` to override the config for a one-off run. The command prints the new instance ID; use it for SSH and lifecycle operations.
 5. SSH into the instance using the printed public IP and run `scripts/bootstrap_server.sh` to install Docker/NVIDIA tooling if the base image lacks it.
 6. Deploy your container, bind-mounting the filesystem path that holds the Wan2 weights (default mount path `/lambda/nfs/<filesystem-name>`):
    ```bash

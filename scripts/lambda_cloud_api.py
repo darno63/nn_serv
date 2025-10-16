@@ -8,11 +8,15 @@ import json
 import os
 import sys
 import textwrap
-from typing import Any, Dict, Iterable
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional
 from urllib import error, parse, request
 
 DEFAULT_BASE_URL = os.getenv("LAMBDA_API_BASE_URL", "https://cloud.lambda.ai")
 API_TIMEOUT_SECONDS = 30
+CONFIG_SEARCH_DIRS = [
+    Path(__file__).resolve().parent.parent / "configs" / "lambda",
+]
 DEFAULT_USER_AGENT = "nn-serv-cli/0.1"
 
 
@@ -98,13 +102,11 @@ def make_parser() -> argparse.ArgumentParser:
               # List persistent filesystems
               scripts/lambda_cloud_api.py list-filesystems
 
-              # Launch an instance
-              scripts/lambda_cloud_api.py launch-instance \\
-                  --region us-south-1 \\
-                  --instance-type gpu_1x_a100_sxm4 \\
-                  --ssh-key my-ssh-key \\
-                  --filesystem my-persistent-fs \\
-                  --name batch-runner
+              # Launch an instance using config defaults
+              scripts/lambda_cloud_api.py launch-instance --config wan2-instance
+
+              # Override config values at runtime
+              scripts/lambda_cloud_api.py launch-instance --config wan2-instance --region us-west-1
 
               # Terminate instances
               scripts/lambda_cloud_api.py terminate-instances i-123abc i-456def
@@ -147,14 +149,23 @@ def make_parser() -> argparse.ArgumentParser:
     get_instance.add_argument("instance_id")
 
     launch = subparsers.add_parser("launch-instance", help="Launch a new instance")
-    launch.add_argument("--region", required=True)
-    launch.add_argument("--instance-type", required=True)
+    launch.add_argument(
+        "--config",
+        help="Name or path of a YAML config with launch defaults (e.g., wan2-instance)",
+    )
+    launch.add_argument(
+        "--region",
+        help="Region code (overrides config)",
+    )
+    launch.add_argument(
+        "--instance-type",
+        help="Instance type slug (overrides config)",
+    )
     launch.add_argument(
         "--ssh-key",
         action="append",
-        required=True,
         dest="ssh_keys",
-        help="Name of an SSH key to attach (repeatable). Exactly one is required by the API.",
+        help="Name of an SSH key to attach (repeatable). Overrides config values.",
     )
     launch.add_argument("--name", help="Optional friendly name for the instance")
     launch.add_argument("--hostname", help="Custom hostname to assign to the instance")
@@ -300,24 +311,100 @@ def cmd_get_instance(client: LambdaApiClient, args: argparse.Namespace) -> Dict[
 
 
 def cmd_launch_instance(client: LambdaApiClient, args: argparse.Namespace) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {
-        "region_name": args.region,
-        "instance_type_name": args.instance_type,
-        "ssh_key_names": args.ssh_keys,
-    }
+    config_data: Dict[str, Any] = {}
+    config_dir: Optional[Path] = None
+    if args.config:
+        config_data, config_dir = _load_launch_config(args.config)
+    config_launch = config_data.get("launch", config_data)
 
-    if args.name:
-        payload["name"] = args.name
-    if args.hostname:
-        payload["hostname"] = args.hostname
-    if args.tag:
-        payload["tags"] = [_parse_key_value(tag) for tag in args.tag]
-    if args.user_data_file:
-        payload["user_data"] = _read_file(args.user_data_file)
+    payload: Dict[str, Any] = {}
+
+    region = args.region or config_launch.get("region") or config_launch.get("region_name")
+    if not region:
+        raise SystemExit(
+            "Region is required. Provide --region or set 'region' in the config file."
+        )
+    payload["region_name"] = region
+
+    instance_type = (
+        args.instance_type
+        or config_launch.get("instance_type")
+        or config_launch.get("instance_type_name")
+    )
+    if not instance_type:
+        raise SystemExit(
+            "Instance type is required. Provide --instance-type or set 'instance_type' in the config file."
+        )
+    payload["instance_type_name"] = instance_type
+
+    config_ssh = _ensure_list(
+        config_launch.get("ssh_keys")
+        or config_launch.get("ssh_key")
+        or config_launch.get("ssh_key_names")
+    )
+    ssh_keys = args.ssh_keys or config_ssh
+    if not ssh_keys:
+        raise SystemExit(
+            "At least one SSH key is required. Provide --ssh-key or set 'ssh_keys' in the config file."
+        )
+    payload["ssh_key_names"] = ssh_keys
+
+    name = args.name or config_launch.get("name")
+    if name:
+        payload["name"] = name
+
+    hostname = args.hostname or config_launch.get("hostname")
+    if hostname:
+        payload["hostname"] = hostname
+
+    filesystem_names = _ensure_list(
+        config_launch.get("filesystem_names")
+        or config_launch.get("file_system_names")
+        or config_launch.get("filesystem")
+        or config_launch.get("filesystems")
+    )
     if args.filesystems:
-        payload["file_system_names"] = args.filesystems
-    if args.filesystem_mounts:
-        payload["file_system_mounts"] = [_parse_filesystem_mount(item) for item in args.filesystem_mounts]
+        filesystem_names.extend(args.filesystems)
+    filesystem_names = _dedupe_preserve_order(filesystem_names)
+    if filesystem_names:
+        payload["file_system_names"] = filesystem_names
+
+    config_mounts = _normalize_config_mounts(
+        config_launch.get("filesystem_mounts")
+        or config_launch.get("file_system_mounts")
+    )
+    cli_mounts = [
+        _parse_filesystem_mount(item) for item in (args.filesystem_mounts or [])
+    ]
+    if config_mounts or cli_mounts:
+        payload["file_system_mounts"] = config_mounts + cli_mounts
+
+    config_tags = _normalize_config_tags(config_launch.get("tags"))
+    cli_tags = [_parse_key_value(tag) for tag in (args.tag or [])]
+    merged_tags = _merge_tags(config_tags, cli_tags)
+    if merged_tags:
+        payload["tags"] = merged_tags
+
+    image = config_launch.get("image")
+    if image:
+        payload["image"] = image
+
+    firewall_rulesets = _ensure_list(config_launch.get("firewall_rulesets"))
+    if firewall_rulesets:
+        payload["firewall_rulesets"] = firewall_rulesets
+
+    user_data: Optional[str] = None
+    if "user_data" in config_launch and config_launch["user_data"]:
+        user_data = str(config_launch["user_data"])
+    if config_launch.get("user_data_file"):
+        user_data_path = _resolve_relative_path(
+            config_launch["user_data_file"], config_dir
+        )
+        user_data = _read_file(str(user_data_path))
+    if args.user_data_file:
+        user_data = _read_file(args.user_data_file)
+    if user_data:
+        payload["user_data"] = user_data
 
     response = client.request("POST", "/api/v1/instance-operations/launch", payload=payload)
     if args.json:
@@ -399,6 +486,76 @@ def cmd_delete_ssh_key(client: LambdaApiClient, args: argparse.Namespace) -> Dic
     return {}
 
 
+def _load_launch_config(config_name: str) -> tuple[Dict[str, Any], Path]:
+    candidates: List[Path] = []
+    explicit_path = Path(config_name)
+    if explicit_path.exists():
+        candidates.append(explicit_path)
+
+    if not explicit_path.suffix:
+        for directory in CONFIG_SEARCH_DIRS:
+            candidates.extend(
+                [
+                    directory / f"{config_name}.yaml",
+                    directory / f"{config_name}.yml",
+                ]
+            )
+
+    checked = []
+    for path in candidates:
+        if path.exists():
+            try:
+                import yaml  # type: ignore
+            except ImportError as exc:  # pragma: no cover - dependency hint
+                raise SystemExit(
+                    "PyYAML is required for --config support. Install it with `pip install pyyaml`."
+                ) from exc
+            with path.open("r", encoding="utf-8") as handle:
+                data = yaml.safe_load(handle) or {}
+            if not isinstance(data, dict):
+                raise SystemExit(f"Config file {path} must contain a mapping at the top level.")
+            return data, path.parent.resolve()
+        checked.append(str(path))
+
+    search_hint = ", ".join(checked) if checked else str(explicit_path)
+    raise SystemExit(f"Config file '{config_name}' not found. Checked: {search_hint}")
+
+
+def _ensure_list(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple, set)):
+        result: List[str] = []
+        for item in value:
+            if item is None:
+                continue
+            if isinstance(item, str):
+                result.append(item)
+            else:
+                raise SystemExit(f"Expected string entries in list, found {type(item).__name__}")
+        return result
+    raise SystemExit(f"Expected string or list, got {type(value).__name__}")
+
+
+def _dedupe_preserve_order(items: List[str]) -> List[str]:
+    seen = set()
+    result = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+
+def _resolve_relative_path(path_str: str, base_dir: Optional[Path]) -> Path:
+    candidate = Path(path_str)
+    if not candidate.is_absolute() and base_dir is not None:
+        candidate = (base_dir / candidate).resolve()
+    return candidate
+
+
 def _parse_key_value(item: str) -> Dict[str, str]:
     if "=" not in item:
         raise SystemExit(f"Invalid tag '{item}'. Expected KEY=VALUE format.")
@@ -414,6 +571,73 @@ def _parse_filesystem_mount(item: str) -> Dict[str, str]:
     if not mount_point.startswith("/"):
         raise SystemExit(f"Mount point must be an absolute path: '{mount_point}'")
     return {"file_system_id": fs_id.strip(), "mount_point": mount_point}
+
+
+def _normalize_config_mounts(value: Any) -> List[Dict[str, str]]:
+    if value is None:
+        return []
+    mounts: List[Dict[str, str]] = []
+    if isinstance(value, (list, tuple)):
+        iterable = value
+    else:
+        iterable = [value]
+    for item in iterable:
+        if isinstance(item, str):
+            mounts.append(_parse_filesystem_mount(item))
+        elif isinstance(item, dict):
+            if {"file_system_id", "mount_point"} <= item.keys():
+                mounts.append(
+                    {
+                        "file_system_id": str(item["file_system_id"]),
+                        "mount_point": str(item["mount_point"]),
+                    }
+                )
+            elif {"name", "mount_point"} <= item.keys():
+                mounts.append(
+                    {
+                        "file_system_id": str(item["name"]),
+                        "mount_point": str(item["mount_point"]),
+                    }
+                )
+            else:
+                raise SystemExit(
+                    "Filesystem mount dicts must include 'file_system_id' (or 'name') and 'mount_point'."
+                )
+        else:
+            raise SystemExit(
+                f"Unsupported filesystem mount entry of type {type(item).__name__}"
+            )
+    return mounts
+
+
+def _normalize_config_tags(value: Any) -> List[Dict[str, str]]:
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        return [{"key": str(key), "value": str(val)} for key, val in value.items()]
+    if isinstance(value, (list, tuple)):
+        normalized: List[Dict[str, str]] = []
+        for item in value:
+            if isinstance(item, dict) and {"key", "value"} <= item.keys():
+                normalized.append({"key": str(item["key"]), "value": str(item["value"])})
+            elif isinstance(item, str):
+                normalized.append(_parse_key_value(item))
+            else:
+                raise SystemExit(
+                    "Tag entries must be dicts with 'key'/'value' or strings in KEY=VALUE format."
+                )
+        return normalized
+    if isinstance(value, str):
+        return [_parse_key_value(value)]
+    raise SystemExit(f"Unsupported tag format: {type(value).__name__}")
+
+
+def _merge_tags(*tag_lists: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    merged: Dict[str, str] = {}
+    for tag_list in tag_lists:
+        for entry in tag_list:
+            merged[entry["key"]] = entry["value"]
+    return [{"key": key, "value": value} for key, value in merged.items()]
 
 
 def _read_file(path: str | None) -> str:

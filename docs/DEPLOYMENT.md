@@ -25,16 +25,12 @@
    ```bash
    scripts/preload_model.py Wan-AI/Wan2.2-T2V-A14B /lambda/nfs/my-persistent-fs/Wan-AI
    ```
+   Edit `configs/lambda/wan2-instance.yaml` to match your region, instance type, SSH key, and filesystem names.
 4. Launch an instance and attach the filesystem so Wan2 stays warm between runs:  
    ```bash
-   scripts/lambda_cloud_api.py launch-instance \
-     --region us-south-1 \
-     --instance-type gpu_1x_a100_sxm4 \
-     --ssh-key my-key \
-     --filesystem my-persistent-fs \
-     --name nn-serv-worker
+   scripts/lambda_cloud_api.py launch-instance --config wan2-instance
    ```
-   The command prints the new instance ID and IP.
+   Pass flags like `--region` or `--ssh-key` to override the config for a one-off launch. The command prints the new instance ID and IP.
 5. SSH to the instance using your private key (`ssh ubuntu@<INSTANCE_IP>`).
 6. Execute `scripts/bootstrap_server.sh` on the instance if the base image lacks Docker or NVIDIA tooling.
 7. Pull and run the container image, bind-mounting the filesystem path that stores the Wan2 model (default `/lambda/nfs/<filesystem-name>`). Set `MODEL_DATA_DIR=/models` in `.env` so the app points to the mounted cache:

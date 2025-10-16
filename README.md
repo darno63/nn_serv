@@ -34,6 +34,7 @@ Infrastructure-as-code friendly template for deploying RAM-intensive AI workload
    - Export `LAMBDA_API_KEY` and (if the model is gated) `HF_TOKEN`.  
    - Copy `.env.example` to `.env`, adjust `MODEL_CONFIG`, and keep `MODEL_DATA_DIR=/models`.
    - Update `ALLOWED_ORIGINS` if your frontend runs on additional hosts.
+   - Edit `configs/lambda/wan2-instance.yaml` to set your region, instance type, SSH key name, and filesystem.
 
 2. **Inspect capacity and filesystems**  
    ```bash
@@ -50,14 +51,9 @@ Infrastructure-as-code friendly template for deploying RAM-intensive AI workload
 
 4. **Launch an inference node with the filesystem attached**  
    ```bash
-   scripts/lambda_cloud_api.py launch-instance \
-     --region us-south-1 \
-     --instance-type gpu_1x_a100_sxm4 \
-     --ssh-key my-key \
-     --filesystem my-persistent-fs \
-     --name nn-serv-worker
+   scripts/lambda_cloud_api.py launch-instance --config wan2-instance
    ```
-   The command prints the instance ID and public IP.
+   Override any value on the fly (e.g., `--region`, `--ssh-key`) if you need a one-off change. The command prints the instance ID and public IP.
 
 5. **Bootstrap and run the service**  
    ```bash

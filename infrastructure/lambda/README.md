@@ -35,7 +35,13 @@ Use these notes alongside `scripts/lambda_cloud_api.py` to create and manage GPU
    ```
    Use flags such as `--region` or `--ssh-key` to override the config for a one-off run. The command prints the new instance ID; use it for SSH and lifecycle operations.
 5. SSH into the instance using the printed public IP and run `scripts/bootstrap_server.sh` to install Docker/NVIDIA tooling if the base image lacks it.
-6. Deploy your container, bind-mounting the filesystem path that holds the Wan2 weights (default mount path `/lambda/nfs/<filesystem-name>`):
+6. (First run only) install the Wan2 Python dependencies in the environment where you will execute `generate.py`:
+   ```bash
+   pip install -r requirements/wan.txt
+   # Reinstall torch with the CUDA wheel if required:
+   # pip install --no-cache-dir --upgrade torch --index-url https://download.pytorch.org/whl/cu124
+   ```
+7. Deploy your container, bind-mounting the filesystem path that holds the Wan2 weights (default mount path `/lambda/nfs/<filesystem-name>`):
    ```bash
    docker run --gpus all \
      -p 8000:8000 \
@@ -44,7 +50,7 @@ Use these notes alongside `scripts/lambda_cloud_api.py` to create and manage GPU
      your-registry/nn-serv:latest
    ```
    Inside the container, point Hugging Face caches to `/models` (set `MODEL_DATA_DIR=/models` in `.env`) so the service reads the already-downloaded Wan2 assets.
-7. When finished, terminate the instance to avoid charges:
+8. When finished, terminate the instance to avoid charges:
    ```bash
    scripts/lambda_cloud_api.py terminate-instances <INSTANCE_ID>
    ```

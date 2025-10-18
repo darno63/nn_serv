@@ -15,7 +15,8 @@ WORKDIR /app
 # Install Python dependencies
 COPY requirements/ ./requirements/
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements/base.txt
+    && pip install --no-cache-dir -r requirements/base.txt \
+    && pip install --no-cache-dir -r requirements/wan.txt || true
 
 # Copy application code
 COPY src/ ./src/

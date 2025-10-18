@@ -59,6 +59,7 @@ Infrastructure-as-code friendly template for deploying RAM-intensive AI workload
    ```bash
    ssh ubuntu@<INSTANCE_IP>
    ./scripts/bootstrap_server.sh              # installs Docker/NVIDIA toolkit if needed
+   pip install -r requirements/wan.txt        # install Wan2 dependencies (reinstall torch with the CUDA wheel if needed)
    docker run --gpus all \
      -p 8000:8000 \
      --env-file .env \

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { fetchHealth, submitGeneration, type GeneratePayload } from './api';
+import { fetchHealth, submitGeneration, type GeneratePayload, type GenerateResponse } from './api';
 
 const DEFAULT_NEGATIVE_PROMPT = 'low quality, artifacts, blurry';
 
@@ -7,7 +7,7 @@ type GenerationState =
   | { status: 'idle' }
   | { status: 'submitting' }
   | { status: 'error'; message: string }
-  | { status: 'success'; response: unknown };
+  | { status: 'success'; response: GenerateResponse };
 
 function useWanDefaults() {
   return useMemo(
@@ -130,11 +130,40 @@ export default function App() {
           {state.status === 'success' && (
             <>
               <h2>Backend Response</h2>
-              <pre>{JSON.stringify(state.response, null, 2)}</pre>
+              <p>Status: {state.response.status}</p>
+              <p>
+                Output: <code>{state.response.output_path}</code>
+              </p>
+              <p>
+                <a
+                  href={buildDownloadHref(state.response.download_url)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Download video
+                </a>
+              </p>
+              <details>
+                <summary>Raw response</summary>
+                <pre>{JSON.stringify(state.response, null, 2)}</pre>
+              </details>
             </>
           )}
         </div>
       </section>
     </main>
   );
+}
+
+function buildDownloadHref(relativeUrl: string): string {
+  const base = import.meta.env.VITE_API_BASE_URL;
+  if (!base) {
+    return relativeUrl;
+  }
+  try {
+    return new URL(relativeUrl, base).toString();
+  } catch (error) {
+    console.error('Failed to build download URL', error);
+    return relativeUrl;
+  }
 }

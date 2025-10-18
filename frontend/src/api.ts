@@ -17,6 +17,15 @@ export type GeneratePayload = {
   numFrames?: number;
 };
 
+export type GenerateResponse = {
+  status: string;
+  output_path: string;
+  download_url: string;
+  command: string;
+  stdout?: string;
+  stderr?: string;
+};
+
 export async function fetchHealth(): Promise<string> {
   const response = await client.get(`${API_PREFIX}/health`);
   if (typeof response.data === 'string') {
@@ -25,7 +34,7 @@ export async function fetchHealth(): Promise<string> {
   return JSON.stringify(response.data);
 }
 
-export async function submitGeneration(payload: GeneratePayload): Promise<unknown> {
+export async function submitGeneration(payload: GeneratePayload): Promise<GenerateResponse> {
   const response = await client.post(`${API_PREFIX}/generate`, payload);
-  return response.data;
+  return response.data as GenerateResponse;
 }

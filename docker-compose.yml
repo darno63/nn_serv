@@ -9,6 +9,7 @@ services:
       - "8000:8000"
     volumes:
       - ./:/workspace:ro
+      - ./outputs:/app/outputs
     environment:
       - APP_MODULE=src.main:app
       - ALLOWED_ORIGINS=http://localhost:5173,http://frontend:5173

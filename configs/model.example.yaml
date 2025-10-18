@@ -4,8 +4,8 @@ model:
   revision: latest
   precision: float16
   quantization: none
-  # Optional: point to a pre-staged checkpoint within the mounted filesystem
-  local_path: /models/Wan-AI/Wan2.2-T2V-A14B
+  # Relative to MODEL_DATA_DIR; point to the staged Wan2 repo
+  local_path: Wan-AI/Wan2.2-T2V-A14B
 runtime:
   batch_size: 1
   max_input_tokens: 2048
@@ -14,3 +14,10 @@ resources:
   cpu_cores: 8
   ram_gb: 64
   gpu_memory_gb: 48
+generation:
+  task: t2v-A14B
+  size: 1280*720
+  frame_num: 129
+  offload_model: true
+  convert_model_dtype: true
+  # extra_args: ["--t5_cpu"]

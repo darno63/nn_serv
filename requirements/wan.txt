@@ -1,0 +1,15 @@
+# Dependencies required to run Wan2.2 generate.py
+# Install these on the GPU host image (they are not included in base.txt to keep local dev light).
+torch>=2.4
+torchvision>=0.19
+torchaudio>=2.4
+diffusers>=0.31
+transformers>=4.49,<4.52
+tokenizers>=0.20.3
+accelerate>=1.1.1
+tqdm>=4.66
+imageio[ffmpeg]>=2.35
+imageio-ffmpeg>=0.4
+opencv-python>=4.9
+easydict>=1.13
+ftfy>=6.2
